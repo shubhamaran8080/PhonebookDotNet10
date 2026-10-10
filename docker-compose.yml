@@ -1,0 +1,52 @@
+name: phonebook-dotnet10
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-phonebook}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-phonebook}
+      POSTGRES_DB: ${POSTGRES_DB:-phonebook_dotnet10}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-phonebook} -d ${POSTGRES_DB:-phonebook_dotnet10}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
+      ASPNETCORE_URLS: http://+:8000
+      ConnectionStrings__DefaultConnection: Host=db;Port=5432;Database=${POSTGRES_DB:-phonebook_dotnet10};Username=${POSTGRES_USER:-phonebook};Password=${POSTGRES_PASSWORD:-phonebook}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-}
+      Jwt__SecretKey: ${JWT_SECRET_KEY:-}
+      Seed__CreateUser: ${SEED_CREATE_USER:-false}
+      Seed__Username: ${SEED_USERNAME:-}
+      Seed__Password: ${SEED_PASSWORD:-}
+      Seed__Email: ${SEED_EMAIL:-}
+      Seed__Count: ${SEED_COUNT:-0}
+    ports:
+      # Host ports deliberately avoid the Java Phonebook app (8000/8080).
+      - "${BACKEND_PORT:-8001}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    environment:
+      # Points the bundled SPA at the backend service name.
+      VITE_API_BASE_URL: /api
+    ports:
+      - "${FRONTEND_PORT:-8081}:80"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
